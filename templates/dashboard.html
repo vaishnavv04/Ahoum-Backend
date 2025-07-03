@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #f0f2f5; /* A softer, modern background color */
+        }
+        .navbar-brand {
+            font-weight: 600;
+        }
+        .card {
+            border: none;
+            transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+        }
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 1rem 3rem rgba(0,0,0,.175)!important;
+        }
+        .list-group-item {
+            border-left: 0;
+            border-right: 0;
+        }
+        .list-group-item:first-child {
+            border-top-left-radius: 0.5rem;
+            border-top-right-radius: 0.5rem;
+            border-top: 0;
+        }
+        .list-group-item:last-child {
+            border-bottom-left-radius: 0.5rem;
+            border-bottom-right-radius: 0.5rem;
+            border-bottom: 0;
+        }
+        .btn-book {
+            transition: all 0.2s ease-in-out;
+        }
+        .btn-book:hover {
+            transform: scale(1.05);
+        }
+        /* Custom Modal for Notifications */
+        .modal-backdrop.show {
+            opacity: 0.7;
+        }
+        .toast-container {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 1090;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Navigation Bar -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark shadow-sm">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="#">Event Booker</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="/logout">Logout <i class="bi bi-box-arrow-right"></i></a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <div class="container mt-5">
+        <h2 class="mb-4 display-6">Welcome, {{ user_name }} 👋</h2>
+
+
+        <div class="row g-4">
+            <!-- Available Events Column -->
+            <div class="col-lg-7">
+                <div class="card shadow-lg h-100">
+                    <div class="card-body p-4">
+                        <h4 class="card-title mb-3"><i class="bi bi-calendar-event"></i> Available Events</h4>
+                        <div id="events-loader" class="text-center py-5">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
+                        </div>
+                        <div id="events" class="list-group"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- My Bookings Column -->
+            <div class="col-lg-5">
+                <div class="card shadow-lg h-100">
+                    <div class="card-body p-4">
+                        <h4 class="card-title mb-3"><i class="bi bi-journal-check"></i> My Bookings</h4>
+                         <div id="bookings-loader" class="text-center py-5">
+                            <div class="spinner-border text-secondary" role="status">
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
+                        </div>
+                        <ul id="bookings" class="list-group"></ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast container for notifications -->
+    <div class="toast-container"></div>
+
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Use a placeholder for the token in this example.
+        // In your actual application, this would be dynamically inserted by the server.
+        const token = "{{ token }}"; 
+
+        document.addEventListener('DOMContentLoaded', () => {
+            loadEvents();
+            loadBookings();
+        });
+
+        // --- Data Fetching and Rendering ---
+
+        async function loadEvents() {
+            const eventsContainer = document.getElementById("events");
+            const loader = document.getElementById("events-loader");
+            eventsContainer.innerHTML = "";
+            loader.style.display = 'block';
+
+            try {
+                // Fetch bookings first to know which events are already booked
+                const bookingsRes = await fetch("http://localhost:5000/bookings/my", {
+                    headers: { Authorization: "Bearer " + token }
+                });
+                if (!bookingsRes.ok) throw new Error('Failed to check your bookings.');
+                const bookingsData = await bookingsRes.json();
+                const bookedIds = new Set(bookingsData.bookings.map(b => b.event.id));
+
+                // Then fetch all events
+                const eventsRes = await fetch("http://localhost:5000/events/", {
+                    headers: { Authorization: "Bearer " + token }
+                });
+                if (!eventsRes.ok) throw new Error('Failed to fetch events.');
+                const eventsData = await eventsRes.json();
+                
+                const today = new Date();
+                today.setHours(0, 0, 0, 0); // Normalize to the start of the day for comparison
+
+                // Filter for events that are not booked and are in the future
+                const availableEvents = eventsData.events.filter(ev => {
+                    const eventDate = new Date(ev.date);
+                    return !bookedIds.has(ev.id) && eventDate >= today;
+                });
+
+                if (availableEvents.length === 0) {
+                    eventsContainer.innerHTML = `<div class="alert alert-info">No upcoming events available to book.</div>`;
+                } else {
+                    renderEvents(availableEvents);
+                }
+
+            } catch (error) {
+                showToast(error.message || 'Error loading events.', 'danger');
+                eventsContainer.innerHTML = `<div class="text-center text-muted p-4">Could not load events.</div>`;
+            } finally {
+                loader.style.display = 'none';
+            }
+        }
+
+        async function loadBookings() {
+            const bookingsList = document.getElementById("bookings");
+            const loader = document.getElementById("bookings-loader");
+            bookingsList.innerHTML = "";
+            loader.style.display = 'block';
+
+            try {
+                const response = await fetch("http://localhost:5000/bookings/my", {
+                    headers: { Authorization: "Bearer " + token }
+                });
+                if (!response.ok) throw new Error('Failed to fetch bookings.');
+                const data = await response.json();
+                renderBookings(data.bookings);
+            } catch (error) {
+                showToast('Error loading bookings.', 'danger');
+                bookingsList.innerHTML = `<li class="list-group-item text-center text-muted">Could not load your bookings.</li>`;
+            } finally {
+                loader.style.display = 'none';
+            }
+        }
+
+        // --- UI Rendering ---
+
+        function renderEvents(events) {
+            const eventsContainer = document.getElementById("events");
+            // Clear previous content
+            eventsContainer.innerHTML = "";
+            
+            if (!events || events.length === 0) {
+                eventsContainer.innerHTML = `<div class="text-center text-muted p-4">No events available at the moment.</div>`;
+                return;
+            }
+            events.forEach(event => {
+                const eventDate = new Date(event.date).toLocaleDateString('en-US', {
+                    year: 'numeric', month: 'long', day: 'numeric'
+                });
+                const eventElement = document.createElement('div');
+                eventElement.className = 'list-group-item d-flex justify-content-between align-items-center';
+                eventElement.innerHTML = `
+                    <div>
+                        <strong class="d-block">${event.name}</strong>
+                        <small class="text-muted">${eventDate}</small>
+                    </div>
+                    <button onclick="book(${event.id})" class="btn btn-sm btn-outline-success btn-book fw-bold">
+                        Book Now <i class="bi bi-arrow-right-circle"></i>
+                    </button>
+                `;
+                eventsContainer.appendChild(eventElement);
+            });
+        }
+
+        function renderBookings(bookings) {
+            const bookingsList = document.getElementById("bookings");
+            bookingsList.innerHTML = ""; // Clear previous bookings
+            if (!bookings || bookings.length === 0) {
+                bookingsList.innerHTML = `<li class="list-group-item text-center text-muted">You have no bookings yet.</li>`;
+                return;
+            }
+            bookings.forEach(booking => {
+                const bookingTimestamp = new Date(booking.timestamp).toLocaleString('en-US', {
+                    dateStyle: 'medium', timeStyle: 'short'
+                });
+                const bookingElement = document.createElement('li');
+                bookingElement.className = 'list-group-item d-flex justify-content-between align-items-center';
+                bookingElement.innerHTML = `
+                    <div>
+                        <strong class="d-block">${booking.event.name}</strong>
+                        <small class="text-muted">Booked on: ${bookingTimestamp}</small>
+                    </div>
+                `;
+                bookingsList.appendChild(bookingElement);
+            });
+        }
+
+        // --- Actions ---
+
+        async function book(eventId) {
+            try {
+                const response = await fetch("http://localhost:5000/bookings/", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        Authorization: "Bearer " + token
+                    },
+                    body: JSON.stringify({ event_id: eventId })
+                });
+                const result = await response.json();
+                if (!response.ok) throw new Error(result.message || 'Booking failed.');
+                
+                showToast(result.message || 'Booking successful!', 'success');
+                // Refresh both lists to show the new booking and remove the event from the available list
+                loadBookings(); 
+                loadEvents();
+            } catch (error) {
+                showToast(error.message, 'danger');
+            }
+        }
+        
+        // --- Utility ---
+
+        function showToast(message, type = 'primary') {
+            const toastContainer = document.querySelector('.toast-container');
+            const toastId = 'toast-' + Math.random().toString(36).substr(2, 9);
+            
+            const toastHTML = `
+                <div id="${toastId}" class="toast align-items-center text-white bg-${type} border-0" role="alert" aria-live="assertive" aria-atomic="true">
+                    <div class="d-flex">
+                        <div class="toast-body">${message}</div>
+                        <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+                    </div>
+                </div>
+            `;
+            
+            toastContainer.insertAdjacentHTML('beforeend', toastHTML);
+            
+            const toastElement = document.getElementById(toastId);
+            const toast = new bootstrap.Toast(toastElement, { delay: 5000 });
+            toast.show();
+            toastElement.addEventListener('hidden.bs.toast', () => toastElement.remove());
+        }
+    </script>
+</body>
+</html>
