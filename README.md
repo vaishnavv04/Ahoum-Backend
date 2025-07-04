@@ -36,6 +36,51 @@ https://documenter.getpostman.com/view/40688989/2sB34bM464
 
 ---
 
+## DataBase Schema 
+
+![Database Diagram](./Schema.png)
+
+---
+ 
+## API Endpoints Summary
+
+| Endpoint         | Method | Auth    | Description                   |
+| ---------------- | ------ | ------- | ----------------------------- |
+| `/auth/register` | POST   | —       | Register new user             |
+| `/auth/login`    | POST   | —       | Login & receive JWT / session |
+| `/logout`        | GET    | Session | Log out user                  |
+| `/events/`       | GET    | JWT     | List upcoming events          |
+| `/bookings/`     | POST   | JWT     | Create a booking              |
+| `/bookings/my`   | GET    | JWT     | List user's bookings          |
+| `/dashboard`     | GET    | Session | Serve user dashboard (UI)     |
+
+---
+
+## 🔔 CRM Webhook Notification
+
+When a booking is confirmed, the backend sends a real-time JSON payload via HTTP POST to the configured `CRM_WEBHOOK_URL`. This helps integrate with external systems such as CRMs, analytics, or notification services.
+
+### Payload Format
+
+```json
+{
+  "booking_id": 42,
+  "event": {
+    "id": 3,
+    "name": "Breathwork Intensive",
+    "date": "2025-07-20T00:00:00Z"
+  },
+  "user": {
+    "id": 7,
+    "name": "Vaishnav",
+    "email": "vaishnav@example.com"
+  },
+  "facilitator_crm_id": "crm_002"
+}
+```
+
+---
+
 ## 🚀 Installation & Local Setup
 
 ```bash
@@ -60,15 +105,3 @@ python app.py
 ```
 Access dashboard UI at http://localhost:5000/
 Use Postman for API testing
-
-📦 API Endpoints Summary
-
-| Endpoint         | Method | Auth    | Description                   |
-| ---------------- | ------ | ------- | ----------------------------- |
-| `/auth/register` | POST   | —       | Register new user             |
-| `/auth/login`    | POST   | —       | Login & receive JWT / session |
-| `/logout`        | GET    | Session | Log out user                  |
-| `/events/`       | GET    | JWT     | List upcoming events          |
-| `/bookings/`     | POST   | JWT     | Create a booking              |
-| `/bookings/my`   | GET    | JWT     | List user's bookings          |
-| `/dashboard`     | GET    | Session | Serve user dashboard (UI)     |
